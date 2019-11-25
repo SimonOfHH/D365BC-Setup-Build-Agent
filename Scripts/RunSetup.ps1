@@ -18,6 +18,7 @@ $ScriptDirectory = Split-Path -Path $MyInvocation.MyCommand.Definition -Parent
 # ==============================================
 # Update "Parameters.ps1 before you start"
 # Run as Administrator (to be able to load dependencies)
+# Attention: you'll need to have at least "User Access Administrator"-permissions in the used Azure Subscription, otherwise you're not able to create Automation Accounts
 # ==============================================
 
 # This script does the following steps:

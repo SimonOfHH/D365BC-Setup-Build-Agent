@@ -4,6 +4,8 @@ Helper to get started with your own Build Agent on [Azure](https://portal.azure.
 
 The PowerShell code is probably not best-practice, but it's meant as a starting point for people having trouble getting started :blush:
 
+**Attention** You'll need to have at least "User Access Administrator"-permissions in the used Azure Subscription, otherwise you're not able to create Automation Accounts
+
 ## Info
 
 Clone this repository, update [Parameters.ps1](https://github.com/SimonOfHH/D365BC-Setup-Build-Agent/blob/master/Scripts/Parameters/Parameters.ps1) in sub-directory "Parameters" and run it. When the script is completed you'll have
