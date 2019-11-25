@@ -55,7 +55,7 @@ if (-not($connected)) {
     }
     catch {
         Write-Host "Please login first to select the correct subscription"
-        Connect-AzAccount
+        Connect-AzAccount -Force | Out-Null
         $context = Get-AzSubscription -SubscriptionName $subscriptionName
         Set-AzContext $context | Out-Null
     }
