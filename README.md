@@ -1,1 +1,1 @@
-# D365BC-Setup-Build-Agent
+# D365BC-Build-Agent

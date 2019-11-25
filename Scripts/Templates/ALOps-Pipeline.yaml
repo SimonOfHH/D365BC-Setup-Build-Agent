@@ -1,0 +1,103 @@
+name: $(Build.BuildId)
+
+variables:
+- name: 'AppVersion'
+  value: '1.0.[yyyyWW].*'
+- name: 'dockerimage'
+  value: 'mcr.microsoft.com/businesscentral/sandbox'  # Update this (when necessary)
+- name: 'TestFilter'
+  value: '50000..99999'
+- name: 'bc_license'
+  value: '<URI to License File>' # Update this!
+- group: 'CI ALOps'
+
+jobs:
+- job: Start_Build_Agent
+  displayName: "Start Build Agent"
+  workspace:
+    clean: all  
+  steps:
+    - powershell:
+        # Invoke Runbook
+        Invoke-RestMethod -Method Post -Uri "$(PowerManagementWebhookURI)" -Body ((@{ResourceGroup = "$(BuildAgentResourceGroupName)"; Name = "$(BuildAgentVM01Name)"; Command = "Start"; TableURI = "$(StorageAccountTableEndpoint)"; SASToken = "$(StorageAccountTableToken)" }) | ConvertTo-Json -Compress) -UseBasicParsing
+      displayName: "Start Build Agent"
+
+- job: Run_ALOps
+  dependsOn: Start_Build_Agent
+  displayName: "Execute ALOps"
+  workspace:
+    clean: all
+  pool:    
+    name: $(BuildAgentPoolName)
+
+  steps:
+  - checkout: self
+    clean: true
+    
+  - task: ALOpsDockerStart@1
+    displayName: 'ALOps Docker Start'
+    inputs:
+      docker_image: $(dockerimage)
+      docker_pull: true
+      #accept_image_outdated: true # Update this (when necessary)
+      #enable_symbol_loading: true # Update this (when necessary)
+      #sql_backup_file: "<URI to SQL Backup (if needed)>" # Update this (when necessary)
+  
+  - task: ALOpsDockerWait@1
+    displayName: 'ALOps Docker Wait'
+    inputs:
+      search_string: 'Ready for connections!'
+  
+  - task: ALOpsLicenseImport@1
+    displayName: 'ALOps License Import'
+    inputs:
+      usedocker: true
+      license_path: $(bc_license)
+    
+  - task: ALOpsAppCompiler@1
+    displayName: 'ALOps App Compiler'
+    inputs:
+      usedocker: true
+      targetproject: 'app/app.json'
+      nav_app_version: $(AppVersion)
+      failed_on_warnings: true    
+
+  - task: ALOpsAppPublish@1
+    displayName: 'ALOps App Publish'
+    inputs:
+      usedocker: true
+      nav_artifact_app_filter: '*.app'   
+      skip_verification: true 
+
+  - task: ALOpsAppTest@1
+    displayName: 'ALOps App Test'
+    inputs:
+      usedocker: true
+      import_action: "Skip"
+      testfilter: $(TestFilter)
+      show_available_tests: true
+    continueOnError: true    
+
+  - task: PublishTestResults@2
+    displayName: 'Publish Test Results'
+    inputs:
+      testResultsFormat: XUnit
+      testResultsFiles: '**/TestResults.xml'
+      testRunTitle: 'BC Test Results: $(Build.BuildId)'
+
+  - task: ALOpsDockerRemove@1
+    displayName: 'ALOps Docker Remove'
+    enabled: true
+    condition: always()    
+
+- job: Stop_Build_Agent
+  dependsOn: Run_ALOps
+  condition: always()
+  displayName: "Stop Build Agent"
+  workspace:
+    clean: all  
+  steps:
+    - powershell:
+        # Invoke Runbook
+        Invoke-RestMethod -Method Post -Uri "$(PowerManagementWebhookURI)" -Body ((@{ResourceGroup = "$(BuildAgentResourceGroupName)"; Name = "$(BuildAgentVM01Name)"; Command = "Stop"; TableURI = "$(StorageAccountTableEndpoint)"; SASToken = "$(StorageAccountTableToken)" }) | ConvertTo-Json -Compress) -UseBasicParsing
+      displayName: "Stop Build Agent"
