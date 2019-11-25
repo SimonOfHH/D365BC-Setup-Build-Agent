@@ -1,4 +1,4 @@
-# D365BC-Build-Agent
+# D365BC Setup Build Agent
 
 Helper to get started with your own Build Agent on [Azure](https://portal.azure.com/) for Dynamics 365 Business Central using [ALOps](https://github.com/HodorNV/ALOps) on [Azure DevOps](https://dev.azure.com/).
 
