@@ -90,7 +90,7 @@ $params = @{
     SetupScript        = $finalSetupScriptUrl
 }
 New-CustomAzVM @params
-Set-CustomVariableGroup -Variables ([pscustomobject]@{Name = "BuildAgentVM01Name"; Value = $vmName; IsSecret = $false }) @variableGroupParams | Out-Null
+Set-CustomVariableGroup -Variables ([pscustomobject]@{Name = "BuildAgentVM02Name"; Value = $vmName; IsSecret = $false }) @variableGroupParams | Out-Null
 
 # 5. Create Storage Table that holds the Shutdown/Startup-commands (we'll use the already existing storage account that was created during VM creation)
 # This check here is to avoid problems, when running the script multiple times
@@ -105,18 +105,18 @@ if ($variables) {
 $storageAccount = Get-AzStorageAccount -ResourceGroupName $resourceGroupName | Select-Object -First 1
 if (-not($sasToken)) {
     $storageAccountTable = Get-AzStorageTable -Name "PowerManagement" -Context $storageAccount.Context -ErrorAction SilentlyContinue
+    $sasToken = New-AzStorageAccountSASToken -Service Table -ResourceType Service, Container, Object -Permission "racwdlup" -Context $storageAccount.Context -ExpiryTime (Get-Date).AddYears(10) # Token expires after 10 years
     if (-not($storageAccountTable)) {
         New-CustomAzStorageTable -Context $storageAccount.Context -TableName "PowerManagement" | Out-Null
         # Add entry to table if the table was just created
-        $uri = "$($storageAccount.Context.TableEndPoint)PowerManagement(PartitionKey='$($resourceGroupName)', RowKey='$($vmName)')$sasToken"
+        $uri = "$($storageAccount.Context.TableEndPoint)PowerManagement$sasToken"
         $params = @{
             "Command"      = ""
             "PartitionKey" = $resourceGroupName
             "RowKey"       = $vmName
         }        
-        Invoke-RestMethod -Method Put -Uri $uri -Headers @{'Accept' = 'application/json'; 'content-type' = 'application/json' } -Body ($params | ConvertTo-Json -Compress) -UseBasicParsing
+        Invoke-RestMethod -Method Post -Uri $uri -Headers @{'Accept' = 'application/json'; 'content-type' = 'application/json' } -Body ($params | ConvertTo-Json -Compress) -UseBasicParsing
     }
-    $sasToken = New-AzStorageAccountSASToken -Service Table -ResourceType Service, Container, Object -Permission "racwdlup" -Context $storageAccount.Context -ExpiryTime (Get-Date).AddYears(10) # Token expires after 10 years
 }
 Set-CustomVariableGroup -Variables ([pscustomobject]@{Name = "StorageAccountTableEndpoint"; Value = $storageAccount.Context.TableEndPoint; IsSecret = $false }) @variableGroupParams | Out-Null
 # Avoid updating if it was already existing, since it might was set to "Secret"
@@ -136,7 +136,7 @@ if (-not(Get-AzAutomationAccount -ResourceGroupName $resourceGroupName -Name $au
 # 7. Create RunBook
 if (-not(Get-AzAutomationRunbook -ResourceGroupName $resourceGroupName -Name $automationRunbookName -AutomationAccountName $automationAccountName -ErrorAction SilentlyContinue)) {    
     Write-Host "Creating Runbook based on Template-Script..."
-    Import-AzAutomationRunbook -ResourceGroupName $resourceGroupName -Name $automationRunbookName -AutomationAccountName $automationAccountName -Path "Templates\Runbook-Template.ps1" -Type PowerShell -Force | Out-Null
+    Import-AzAutomationRunbook -ResourceGroupName $resourceGroupName -Name $automationRunbookName -AutomationAccountName $automationAccountName -Path ".\Scripts\Templates\Runbook-Template.ps1" -Type PowerShell -Force | Out-Null
     Write-Host "Publishing Runbook..."
     Publish-AzAutomationRunbook -ResourceGroupName $resourceGroupName -AutomationAccountName $automationAccountName -Name $automationRunbookName | Out-Null
 }

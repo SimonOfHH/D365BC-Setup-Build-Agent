@@ -29,15 +29,15 @@ function Global:Set-CustomVariableGroup {
             if ($existingGroup){
                 $id = $existingGroup.id
                 foreach ($variable in $Variables){
-                    if ($json.value.variables.($variable.Name)){
+                    if ($existingGroup.variables.($variable.Name)){
                         #"Variable $($variable.Name) existing"
-                        $json.value.variables.($variable.Name).value = $variable.Value
+                        $existingGroup.variables.($variable.Name).value = $variable.Value
                     } else {
                         #"Variable $($variable.Name) not existing"
-                        $json.value.variables | Add-Member -NotePropertyMembers @{$variable.Name=[pscustomobject]@{value=$variable.Value}}
+                        $existingGroup.variables | Add-Member -NotePropertyMembers @{$variable.Name=[pscustomobject]@{value=$variable.Value}}
                     }
                 }
-                $body = @{ "name" = $GroupName; "description" = "Created by Setup Script"; "type" = "Vsts"; "variables" = $json.value.variables } | ConvertTo-Json -Compress
+                $body = @{ "name" = $GroupName; "description" = "Created by Setup Script"; "type" = "Vsts"; "variables" = $existingGroup.variables } | ConvertTo-Json -Compress
                 Write-Host "Updating variable-group $($GroupName)" -f Yellow
                 $uri = "https://dev.azure.com/$DevOpsOrganisation/$DevOpsProject/_apis/distributedtask/variablegroups/$($id)?api-version=5.1-preview.1"
                 return ((Invoke-WebRequest -Method Put -Body $body -uri $uri -Headers $headers -UseBasicParsing).Content | ConvertFrom-Json)
