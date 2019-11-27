@@ -90,7 +90,7 @@ $params = @{
     SetupScript        = $finalSetupScriptUrl
 }
 New-CustomAzVM @params
-Set-CustomVariableGroup -Variables ([pscustomobject]@{Name = "BuildAgentVM02Name"; Value = $vmName; IsSecret = $false }) @variableGroupParams | Out-Null
+Set-CustomVariableGroup -Variables ([pscustomobject]@{Name = "BuildAgentVM03Name"; Value = $vmName; IsSecret = $false }) @variableGroupParams | Out-Null
 
 # 5. Create Storage Table that holds the Shutdown/Startup-commands (we'll use the already existing storage account that was created during VM creation)
 # This check here is to avoid problems, when running the script multiple times
@@ -150,11 +150,14 @@ if (-not($webhook)) {
 }
 
 # 9. Create Schedule
-$schedule = Get-AzAutomationSchedule -AutomationAccountName $automationAccountName -ResourceGroupName $resourceGroupName -Name $automationRunbookScheduleName -ErrorAction SilentlyContinue
+# We will create one Schedule for every half our; since schedules minimum setting is 1 hour, we will create 2
+$scheduleName = "$automationRunbookScheduleName-$vmName-1"
+$schedule = Get-AzAutomationSchedule -AutomationAccountName $automationAccountName -ResourceGroupName $resourceGroupName -Name $scheduleName -ErrorAction SilentlyContinue
 if (-not($schedule)) {
     Write-Host "Creating Schedule..."
-    $StartTime = (Get-Date).AddMinutes(6)
-    $schedule = New-AzAutomationSchedule -AutomationAccountName $automationAccountName -ResourceGroupName $resourceGroupName -Name $automationRunbookScheduleName -StartTime $StartTime -HourInterval 1
+    $baseDate = (Get-Date).AddMinutes(6) # The start time has to be at least 5 Minutes and 1 second after creation of the schedule, so add 6 Minutes
+    $StartTime = Get-Date -Date ($baseDate.Date) -Hour ($baseDate.Hour + 1) -Minute 0
+    $schedule = New-AzAutomationSchedule -AutomationAccountName $automationAccountName -ResourceGroupName $resourceGroupName -Name $scheduleName -StartTime $StartTime -HourInterval 1
     Write-Host "Registering Schedule..."
     # These are the parameters for the scheduler
     $params = @{
@@ -164,5 +167,23 @@ if (-not($schedule)) {
         "SASToken"      = $sasToken
     }
     $scheduleParameters = @{WebhookName = "InvokeRunbook"; RequestBody = ($params | ConvertTo-Json) } 
-    Register-AzAutomationScheduledRunbook -AutomationAccountName $automationAccountName -RunbookName $automationRunbookName -ScheduleName $automationRunbookScheduleName -ResourceGroupName $resourceGroupName -Parameters @{webhookData = $scheduleParameters } | Out-Null
+    Register-AzAutomationScheduledRunbook -AutomationAccountName $automationAccountName -RunbookName $automationRunbookName -ScheduleName $scheduleName -ResourceGroupName $resourceGroupName -Parameters @{webhookData = $scheduleParameters } | Out-Null
+}
+$scheduleName = "$automationRunbookScheduleName-$vmName-2"
+$schedule = Get-AzAutomationSchedule -AutomationAccountName $automationAccountName -ResourceGroupName $resourceGroupName -Name $scheduleName -ErrorAction SilentlyContinue
+if (-not($schedule)) {
+    Write-Host "Creating Schedule..."
+    $baseDate = (Get-Date).AddMinutes(6) # The start time has to be at least 5 Minutes and 1 second after creation of the schedule, so add 6 Minutes
+    $StartTime = Get-Date -Date ($baseDate.Date) -Hour ($baseDate.Hour + 1) -Minute 30
+    $schedule = New-AzAutomationSchedule -AutomationAccountName $automationAccountName -ResourceGroupName $resourceGroupName -Name $scheduleName -StartTime $StartTime -HourInterval 1
+    Write-Host "Registering Schedule..."
+    # These are the parameters for the scheduler
+    $params = @{
+        "Name"          = $vmName
+        "ResourceGroup" = $resourceGroupName
+        "TableURI"      = $storageAccount.Context.TableEndPoint
+        "SASToken"      = $sasToken
+    }
+    $scheduleParameters = @{WebhookName = "InvokeRunbook"; RequestBody = ($params | ConvertTo-Json) } 
+    Register-AzAutomationScheduledRunbook -AutomationAccountName $automationAccountName -RunbookName $automationRunbookName -ScheduleName $scheduleName -ResourceGroupName $resourceGroupName -Parameters @{webhookData = $scheduleParameters } | Out-Null
 }
